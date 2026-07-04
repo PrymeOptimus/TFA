@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --hearth-bg: 246 247 251;
+  --hearth-surface: 255 255 255;
+  --hearth-card: 255 255 255;
+  --hearth-border: 228 231 238;
+  --hearth-text: 23 25 35;
+  --hearth-muted: 105 112 130;
+  --hearth-accent: 99 102 241; /* indigo-500, default; overridden per household/display */
+}
+
+.dark {
+  --hearth-bg: 10 12 20;
+  --hearth-surface: 18 21 32;
+  --hearth-card: 24 27 40;
+  --hearth-border: 41 45 61;
+  --hearth-text: 240 241 246;
+  --hearth-muted: 158 163 179;
+  --hearth-accent: 129 140 248; /* indigo-400 */
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-hearth-bg text-hearth-text font-body antialiased;
+}
+
+/* Full-screen kiosk displays should never show a scrollbar or bounce. */
+.kiosk {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+.card {
+  @apply bg-hearth-card border border-hearth-border rounded-xl2 shadow-card;
+}
+
+::selection {
+  background-color: rgb(var(--hearth-accent) / 0.35);
+}

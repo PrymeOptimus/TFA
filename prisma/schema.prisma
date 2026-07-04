@@ -1,0 +1,458 @@
+// Hearth — Family Command Center
+// Prisma schema. PostgreSQL. See docs/ARCHITECTURE.md for design rationale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Auth (Auth.js / NextAuth Prisma adapter shape)
+// ─────────────────────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum HouseholdRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+/// A login-capable account. May administer one or more households.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String? // for credentials-based login, if enabled instead of/alongside OAuth
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  memberships       HouseholdMember[]
+  calendarConnections CalendarConnection[]
+}
+
+/// Tenant boundary. All data is scoped to a Household; nothing crosses this line.
+model Household {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("America/New_York")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members             HouseholdMember[]
+  familyMembers       FamilyMember[]
+  displays            Display[]
+  calendarConnections CalendarConnection[]
+  calendarEvents      CalendarEventCache[]
+  chores              Chore[]
+  rewards             Reward[]
+  redemptions         RewardRedemption[]
+  mealPlans           MealPlan[]
+  notes               Note[]
+  widgets             Widget[]
+  layouts             Layout[]
+  photos              Photo[]
+  weatherSettings     WeatherSettings?
+}
+
+/// Join table: which login Users can administer which Household, and at what role.
+model HouseholdMember {
+  id          String        @id @default(cuid())
+  householdId String
+  userId      String
+  role        HouseholdRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+}
+
+/// A person in the family shown on the display — distinct from a login User.
+/// Kids, for example, have a FamilyMember profile but no login account.
+model FamilyMember {
+  id          String   @id @default(cuid())
+  householdId String
+  name        String
+  color       String   @default("#6366F1") // hex accent used across calendar/chores
+  avatarUrl   String?
+  initials    String?
+  isChild     Boolean  @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  calendarConnections CalendarConnection[]
+  chores              Chore[]
+  redemptions         RewardRedemption[]
+  eventAttendance     CalendarEventAttendee[]
+
+  @@index([householdId])
+}
+
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT // scaffolded for Phase 3
+  APPLE // scaffolded for Phase 3 (CalDAV/ICS)
+}
+
+enum CalendarSyncStatus {
+  CONNECTED
+  NEEDS_REAUTH
+  ERROR
+  DISABLED
+}
+
+/// One connected external calendar account. Tokens are encrypted at rest
+/// and are never returned to the browser (see lib/crypto.ts + API layer).
+model CalendarConnection {
+  id               String             @id @default(cuid())
+  householdId      String
+  familyMemberId   String?
+  userId           String?
+  provider         CalendarProvider
+  providerAccountEmail String?
+  externalCalendarId   String? // e.g. Google calendarId, defaults to "primary"
+  displayName      String?
+  color            String?            // overrides FamilyMember color for this source if set
+  accessTokenEnc   String?            @db.Text // AES-GCM encrypted
+  refreshTokenEnc  String?            @db.Text // AES-GCM encrypted
+  tokenExpiresAt   DateTime?
+  scopes           String?
+  status           CalendarSyncStatus @default(CONNECTED)
+  lastSyncedAt     DateTime?
+  lastError        String?
+  syncToken        String? // Google incremental sync token
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  events       CalendarEventCache[]
+
+  @@index([householdId])
+}
+
+/// Locally cached copy of external calendar events for fast, offline-tolerant rendering.
+/// Refreshed by the sync job; never the source of truth for edits.
+model CalendarEventCache {
+  id                 String    @id @default(cuid())
+  householdId        String
+  calendarConnectionId String
+  externalEventId    String
+  title              String
+  description        String?   @db.Text
+  location           String?
+  startAt            DateTime
+  endAt              DateTime
+  allDay             Boolean   @default(false)
+  timezone           String?
+  category           String?
+  recurrenceRule     String?   // RRULE string, if the event recurs
+  recurringEventId   String?   // external id of the recurring "master" event
+  isCancelled        Boolean   @default(false)
+  colorOverride      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  household          Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  calendarConnection CalendarConnection  @relation(fields: [calendarConnectionId], references: [id], onDelete: Cascade)
+  attendees          CalendarEventAttendee[]
+
+  @@unique([calendarConnectionId, externalEventId])
+  @@index([householdId, startAt])
+}
+
+/// Links a cached event to one or more FamilyMembers for color-coding/filtering.
+model CalendarEventAttendee {
+  id             String   @id @default(cuid())
+  eventId        String
+  familyMemberId String
+
+  event        CalendarEventCache @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember       @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, familyMemberId])
+}
+
+enum RecurrenceFreq {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+/// A chore assigned to a family member, optionally recurring, worth points.
+model Chore {
+  id             String         @id @default(cuid())
+  householdId    String
+  familyMemberId String
+  title          String
+  notes          String?
+  points         Int            @default(0)
+  dueDate        DateTime?
+  recurrence     RecurrenceFreq @default(NONE)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  household    Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember        @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  completions  ChoreCompletion[]
+
+  @@index([householdId, familyMemberId])
+}
+
+/// One completed instance of a chore (supports recurring chores having history).
+model ChoreCompletion {
+  id          String   @id @default(cuid())
+  choreId     String
+  completedAt DateTime @default(now())
+  pointsEarned Int
+
+  chore Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+
+  @@index([choreId])
+}
+
+/// A reward that can be redeemed once a FamilyMember has enough points.
+model Reward {
+  id             String   @id @default(cuid())
+  householdId    String
+  name           String
+  description    String?
+  requiredPoints Int
+  iconUrl        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  household   Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  redemptions RewardRedemption[]
+}
+
+model RewardRedemption {
+  id             String   @id @default(cuid())
+  householdId    String
+  rewardId       String
+  familyMemberId String
+  redeemedAt     DateTime @default(now())
+  pointsSpent    Int
+  approved       Boolean  @default(false)
+
+  household    Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  reward       Reward       @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+}
+
+enum MealSlot {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+/// One week of planned meals for a household.
+model MealPlan {
+  id          String   @id @default(cuid())
+  householdId String
+  weekStart   DateTime // Monday 00:00 of the planned week
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  entries   MealEntry[]
+  groceryItems GroceryItem[]
+
+  @@unique([householdId, weekStart])
+}
+
+model MealEntry {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  dayOfWeek  Int // 0=Sunday .. 6=Saturday
+  slot       MealSlot
+  title      String
+  imageUrl   String?
+  notes      String?
+
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([mealPlanId, dayOfWeek, slot])
+}
+
+model GroceryItem {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  label      String
+  isChecked  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+}
+
+/// Sticky-note style announcements shown on the display.
+model Note {
+  id          String   @id @default(cuid())
+  householdId String
+  body        String   @db.Text
+  color       String   @default("#FDE68A")
+  authorName  String?
+  pinned      Boolean  @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+}
+
+enum WidgetType {
+  CLOCK
+  WEATHER
+  CALENDAR_MONTH
+  CALENDAR_WEEK
+  CALENDAR_AGENDA
+  CALENDAR_LIST
+  CHORES
+  MEAL_PLAN
+  NOTES
+  PHOTOS
+}
+
+/// A single widget instance placed on a Layout's grid.
+model Widget {
+  id          String     @id @default(cuid())
+  householdId String
+  layoutId    String
+  type        WidgetType
+  x           Int        @default(0)
+  y           Int        @default(0)
+  w           Int        @default(4)
+  h           Int        @default(4)
+  config      Json?      // per-widget options, e.g. { "familyMemberIds": [...] }
+  isEnabled   Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  layout    Layout    @relation(fields: [layoutId], references: [id], onDelete: Cascade)
+
+  @@index([layoutId])
+}
+
+/// A named, reusable grid layout ("Full Calendar", "Kitchen Command Center", ...).
+/// Presets are seeded per-household with isPreset=true and can be cloned/edited.
+model Layout {
+  id          String   @id @default(cuid())
+  householdId String
+  name        String
+  isPreset    Boolean  @default(false)
+  columns     Int      @default(12)
+  rows        Int      @default(8)
+  background  String?  // 'none' | 'photos' | hex color
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  widgets   Widget[]
+  displays  Display[]
+}
+
+model Photo {
+  id          String   @id @default(cuid())
+  householdId String
+  url         String
+  storageKey  String? // key in S3/Supabase storage, for deletion
+  source      String   @default("upload") // 'upload' | 'google_photos' (Phase 3)
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+}
+
+model WeatherSettings {
+  id            String   @id @default(cuid())
+  householdId   String   @unique
+  provider      String   @default("openweathermap")
+  locationName  String?
+  latitude      Float?
+  longitude     Float?
+  units         String   @default("imperial") // 'imperial' | 'metric'
+  updatedAt     DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+}
+
+/// A paired physical/browser screen. The pairing code is shown on first load
+/// of /display/[displayCode] and is claimed from the dashboard.
+model Display {
+  id          String   @id @default(cuid())
+  /// Null until an admin claims the display with its pairingCode.
+  householdId String?
+  name        String   @default("Unpaired Display")
+  displayCode String   @unique // used in the public display URL
+  pairingCode String?  @unique // short code shown on-screen while unclaimed
+  layoutId    String?
+  orientation String   @default("landscape") // 'landscape' | 'portrait'
+  theme       String   @default("dark") // 'dark' | 'light' | 'auto'
+  accentColor String   @default("#6366F1")
+  isClaimed   Boolean  @default(false)
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  layout    Layout?    @relation(fields: [layoutId], references: [id], onDelete: SetNull)
+
+  @@index([householdId])
+}

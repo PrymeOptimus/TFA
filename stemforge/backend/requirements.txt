@@ -1,0 +1,14 @@
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+numpy>=1.26
+scipy>=1.11
+librosa>=0.10
+soundfile>=0.12
+httpx>=0.27
+pydantic>=2.5
+
+# Neural separation engine (recommended). Without these, StemForge runs the
+# DSP fallback and flags every stem as low confidence.
+torch>=2.1
+demucs>=4.0.1

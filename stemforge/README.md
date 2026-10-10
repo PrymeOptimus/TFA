@@ -7,6 +7,7 @@ Upload a track → get 10 isolated stems (Vocals, Drums, Percussion, Bass, Guita
 ```bash
 cd stemforge/backend
 pip install -r requirements.txt     # includes torch + demucs (neural engine)
+pip install -e .                    # optional: `python -m stemforge` from anywhere (needed by the plug-in)
 python -m stemforge --port 8000     # needs ffmpeg on PATH
 # open http://127.0.0.1:8000
 ```
@@ -51,7 +52,7 @@ Run the tests with `cd stemforge/backend && python -m pytest -q`.
 | `STEMFORGE_DEMUCS_MODEL` | `htdemucs_6s` | Must be a 6-source model for guitar/piano. 4-source models also work |
 | `STEMFORGE_DEMUCS_REPO` | — | Local weights folder |
 | `STEMFORGE_DEVICE` | `auto` | `cuda` / `mps` / `cpu` |
-| `STEMFORGE_DATA_DIR` | `./data` | Track storage |
+| `STEMFORGE_DATA_DIR` | `~/.stemforge/data` | Track storage (shared with the DAW plug-in) |
 | `STEMFORGE_HISTORY_LIMIT` | `10` | |
 | `STEMFORGE_MAX_UPLOAD_MB` | `200` | |
 | `STEMFORGE_WAV_SUBTYPE` | `PCM_24` | `PCM_16`, `PCM_24`, `FLOAT` |
@@ -74,6 +75,8 @@ backend/stemforge/
 frontend/        no-build vanilla JS: index.html, app.js, engine.js (Web Audio), styles.css
 ```
 
-## VST plugin status
+## DAW plug-in (VST3 / AU / Standalone)
 
-This build is a local web app: a Python engine plus a browser mixer. A real VST3/AU plugin needs a C++ (JUCE) wrapper. The planned route is a JUCE plugin whose editor hosts this same UI in a `WebBrowserComponent` and talks to the local engine, adding DAW drag-out of stems and host-tempo sync. The engine and API are already split out for that.
+`plugin/` contains a JUCE 8 plug-in that hosts this same UI inside your DAW. Audio plays through the DAW mixer, with optional per-stem outputs. Playback follows the DAW transport, and stems are time-stretched to the DAW tempo (rubberband) so they lock to the grid. A native dock drags stems onto DAW tracks. See [plugin/README.md](plugin/README.md).
+
+Plug-in endpoints: `POST /api/tracks/{id}/render {bpm}` (stem paths, stretched to `bpm`) · `GET /api/tracks/{id}/peaks` · `GET /api/tracks/{id}/stems/{stem}/path` · `POST /api/tracks/{id}/recombine?as_path=true`.

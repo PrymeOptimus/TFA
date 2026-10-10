@@ -1,4 +1,5 @@
 import { MixEngine, computePeaks, drawWave } from "./engine.js";
+import { HOST, PluginEngine, bridge, serverPeaks } from "./plugin.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const ACCEPT = [".wav", ".mp3", ".m4a", ".flac"];
@@ -16,8 +17,9 @@ const state = {
 };
 
 // Low-memory devices decode at 22.05 kHz to roughly halve RAM for 10+ stems.
-const LITE = (navigator.deviceMemory && navigator.deviceMemory <= 4) ||
-  (window.matchMedia("(max-width: 700px)").matches && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+const LITE = !HOST && ((navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+  (window.matchMedia("(max-width: 700px)").matches && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)));
+if (HOST) document.documentElement.classList.add("in-daw");
 
 // ---------------------------------------------------------------- utilities
 function fmtTime(s, tenths = false) {
@@ -96,7 +98,7 @@ async function openTrack(meta) {
   const token = ++state.loadToken;
   teardownMixer();
   state.track = meta;
-  try { localStorage.setItem(LS_LAST, meta.id); } catch { /* storage unavailable */ }
+  if (!HOST) { try { localStorage.setItem(LS_LAST, meta.id); } catch { /* storage unavailable */ } }
   $("#dropSection").hidden = true;
   $("#trackSection").hidden = false;
   $("#newTrackBtn").hidden = false;
@@ -104,9 +106,18 @@ async function openTrack(meta) {
   renderSeparateState(meta);
   markHistoryActive();
 
-  state.engine = new MixEngine({ lite: LITE });
+  state.engine = HOST ? new PluginEngine() : new MixEngine({ lite: LITE });
   state.engine.onended = () => setPlayingUI(false);
-  try {
+  if (HOST) {
+    // In the DAW the plug-in plays audio; the UI only needs waveform peaks from the engine.
+    try {
+      state.serverPeaks = await (await api(`/api/tracks/${meta.id}/peaks`)).json();
+      if (token !== state.loadToken) return;
+      state.engine.setDuration(state.serverPeaks.duration_sec);
+      state.mixPeaks = serverPeaks(state.serverPeaks.mix, state.serverPeaks.scale);
+      drawMix();
+    } catch (e) { toast(`Could not load waveform: ${e.message}`, "error"); }
+  } else try {
     const buf = await (await api(`/api/tracks/${meta.id}/mix`)).arrayBuffer();
     const audio = await state.engine.decode(buf);
     if (token !== state.loadToken) return;
@@ -186,7 +197,9 @@ async function buildMixer(meta, token) {
   const eng = state.engine;
   $("#mixerSection").hidden = false;
   $("#liteNote").hidden = !LITE;
-  $("#zipBtn").href = `/api/tracks/${meta.id}/zip`;
+  $("#zipBtn").href = HOST ? "#" : `/api/tracks/${meta.id}/zip`;
+  $("#zipBtn").textContent = HOST ? "Show files" : "Download all";
+  $("#syncPanel").hidden = !HOST;
   $("#timeTotal").textContent = fmtTime(meta.analysis.duration_sec);
   const lanesEl = $("#lanes");
   lanesEl.replaceChildren();
@@ -222,6 +235,16 @@ async function buildMixer(meta, token) {
       dl.href = `/api/tracks/${meta.id}/stems/${entry.id}?download=true`;
       dl.download = entry.download_name;
       dl.title = `Download ${entry.download_name}`;
+      if (HOST) {
+        // WebViews can't save downloads: reveal the file instead, and offer a drag handle.
+        dl.title = "Show file (at the current DAW tempo)";
+        dl.addEventListener("click", (e) => { e.preventDefault(); bridge.call("sf_reveal", entry.id); });
+        const drag = document.createElement("button");
+        drag.className = "icon-btn small drag-out"; drag.title = "Drag into your DAW (or use the dock below)";
+        drag.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`;
+        drag.addEventListener("pointerdown", (e) => { e.preventDefault(); bridge.call("sf_startDrag", entry.id); });
+        $(".lane-controls", el).prepend(drag);
+      }
     }
     if (entry.id === "guitar" && hasSplit) {
       const t = document.createElement("button");
@@ -233,9 +256,11 @@ async function buildMixer(meta, token) {
     wireLane(el, entry);
     lanesEl.append(el);
     state.lanes.set(entry.id, { el, entry, peaks: null });
-    eng.addLane(entry.id, null);
+    eng.addLane(entry.id, HOST ? entry.status === "ok" : null);
     if (entry.parent) eng.set(entry.id, { enabled: false });
   }
+
+  if (HOST) return buildPluginMixer(meta, token);
 
   // Decode stems in parallel (bounded) so the first lanes appear quickly.
   const toLoad = meta.stems.filter((s) => s.status === "ok" && state.lanes.has(s.id));
@@ -274,6 +299,105 @@ async function buildMixer(meta, token) {
   startRaf();
 }
 
+async function buildPluginMixer(meta, token) {
+  const eng = state.engine;
+  if (!state.serverPeaks || !Object.keys(state.serverPeaks.stems || {}).length) {
+    try { state.serverPeaks = await (await api(`/api/tracks/${meta.id}/peaks`)).json(); } catch { /* drawn empty */ }
+  }
+  if (token !== state.loadToken) return;
+  for (const [id, lane] of state.lanes) {
+    lane.peaks = serverPeaks(state.serverPeaks?.stems?.[id], state.serverPeaks?.scale);
+    if (lane.entry.status === "ok") $(".lane-empty", lane.el).textContent = "";
+    drawLane(id);
+  }
+  restoreUiState();
+  eng._applyGains();
+  setTransportEnabled(false);
+  const loadNote = $("#loadNote");
+  loadNote.hidden = false; loadNote.textContent = "Loading stems into the plug-in…";
+  eng.onstate = (s) => renderSyncState(s);
+  await eng.attach(meta.id);
+  syncLaneVisuals();
+  startRaf();
+}
+
+// ---------------------------------------------------------------- DAW sync panel (plug-in only)
+let uiStateTimer;
+function saveUiState() {
+  if (!HOST) return;
+  clearTimeout(uiStateTimer);
+  uiStateTimer = setTimeout(() => {
+    const lanes = {};
+    for (const [id, l] of state.engine.lanes) lanes[id] = { vol: l.vol, mute: l.mute, solo: l.solo };
+    bridge.call("sf_saveUiState", JSON.stringify({ trackId: state.track?.id, lanes, guitarSplit: state.guitarSplit }));
+  }, 250);
+}
+
+function restoreUiState() {
+  let saved = null;
+  try { saved = JSON.parse(state.session?.uiState || "null"); } catch { /* ignore */ }
+  if (!saved || saved.trackId !== state.track?.id) return;
+  for (const [id, v] of Object.entries(saved.lanes || {})) {
+    const lane = state.lanes.get(id);
+    if (!lane) continue;
+    state.engine.set(id, { vol: v.vol, mute: v.mute, solo: v.solo });
+    $(".fader", lane.el).value = v.vol;
+    $(".mute", lane.el).setAttribute("aria-pressed", String(!!v.mute));
+    $(".solo", lane.el).setAttribute("aria-pressed", String(!!v.solo));
+  }
+  if (saved.guitarSplit && state.lanes.has("guitar_electric")) setGuitarSplit(true);
+}
+
+function renderSyncState(s) {
+  const eng = state.engine;
+  const mine = s.trackId === state.track?.id;
+  const loader = s.loader || {};
+  const host = s.host || {};
+  const sync = s.sync || {};
+  const busy = loader.state === "rendering" || loader.state === "loading";
+  const loadNote = $("#loadNote");
+  if (!mine || busy) { loadNote.hidden = false; loadNote.textContent = loader.message || "Loading stems into the plug-in…"; }
+  else loadNote.hidden = true;
+  setTransportEnabled(mine);
+  if (mine && s.duration) $("#timeTotal").textContent = fmtTime(s.duration);
+
+  const followDaw = !!sync.hostSync && host.valid;
+  $("#playBtn").classList.toggle("disabled", !mine || followDaw);
+  $("#stopBtn").classList.toggle("disabled", !mine || followDaw);
+  $("#transport").classList.toggle("daw-follow", followDaw);
+  setPlayingUI(!!s.playing);
+
+  const el = $("#syncStatus");
+  const bpm = (v) => (Math.round(v * 100) / 100).toString();
+  const parts = [];
+  if (host.valid) parts.push(`DAW ${bpm(host.bpm)} BPM ${host.playing ? "▶" : "■"}`);
+  else parts.push("No DAW transport (standalone)");
+  if (mine && s.renderBpm) parts.push(s.stretched ? `stems synced to ${bpm(s.renderBpm)} BPM` : `stems at original ${bpm(s.renderBpm)} BPM`);
+  if (loader.state === "error") parts.push(`⚠ ${loader.message}`);
+  else if (busy) parts.push(loader.message);
+  el.textContent = parts.join(" · ");
+  el.classList.toggle("warn", loader.state === "error");
+
+  // Reflect native settings in the controls (unless the user is editing them).
+  const active = document.activeElement;
+  if (active !== $("#syncFollow")) $("#syncFollow").checked = !!sync.hostSync;
+  if (active !== $("#syncStretch")) $("#syncStretch").checked = !!sync.stretch;
+  if (active !== $("#syncStartBar")) $("#syncStartBar").value = sync.startBar ?? 1;
+  if (active !== $("#syncNudge")) $("#syncNudge").value = sync.nudgeMs ?? 0;
+  $("#syncStretch").disabled = !sync.hostSync;
+  if (eng && mine) renderLoopRegions();
+}
+
+function pushSync() {
+  bridge.call("sf_setSync", {
+    hostSync: $("#syncFollow").checked,
+    stretch: $("#syncStretch").checked,
+    startBar: parseFloat($("#syncStartBar").value) || 1,
+    nudgeMs: parseFloat($("#syncNudge").value) || 0,
+  }).then((session) => { state.session = session; });
+}
+["#syncFollow", "#syncStretch", "#syncStartBar", "#syncNudge"].forEach((sel) => $(sel)?.addEventListener("change", pushSync));
+
 function wireLane(el, entry) {
   const id = entry.id;
   const mute = $(".mute", el), solo = $(".solo", el), fader = $(".fader", el);
@@ -288,7 +412,7 @@ function wireLane(el, entry) {
     }
     solo.setAttribute("aria-pressed", String(v)); state.engine.set(id, { solo: v }); syncLaneVisuals();
   });
-  fader.addEventListener("input", () => state.engine.set(id, { vol: parseFloat(fader.value) }));
+  fader.addEventListener("input", () => { state.engine.set(id, { vol: parseFloat(fader.value) }); saveUiState(); });
   fader.addEventListener("dblclick", () => { fader.value = 1; state.engine.set(id, { vol: 1 }); });
 
   const btn = $(".send-btn", el), menu = $(".send-menu", el);
@@ -316,8 +440,13 @@ async function sendStem(entry, target) {
     toast(`${entry.label} sent to ${label}.`);
   } catch (e) {
     if (e.status === 501) {
-      toast(`No ${label} integration is configured on this server — downloading the stem so you can upload it manually.`);
-      triggerDownload(`/api/tracks/${state.track.id}/stems/${entry.id}?download=true`, entry.download_name);
+      if (HOST) {
+        toast(`No ${label} integration is configured — showing the stem file so you can upload it manually.`);
+        bridge.call("sf_reveal", entry.id);
+      } else {
+        toast(`No ${label} integration is configured on this server — downloading the stem so you can upload it manually.`);
+        triggerDownload(`/api/tracks/${state.track.id}/stems/${entry.id}?download=true`, entry.download_name);
+      }
     } else toast(`Send to ${label} failed: ${e.message}`, "error");
   }
 }
@@ -339,6 +468,7 @@ function syncLaneVisuals() {
   for (const [id, l] of state.lanes) {
     l.el.classList.toggle("silenced", l.entry.status === "ok" && !state.engine.audible(id));
   }
+  saveUiState();
 }
 
 function setTransportEnabled(on) {
@@ -409,7 +539,8 @@ function attachWaveInteractions(el, isMaster) {
       const { start, end } = state.engine.loop;
       if (end - start > 0.1) { await state.engine.setLoop({ on: true, start, end }); setLoopUI(true); }
     } else {
-      await state.engine.seek(toTime(e.clientX));
+      if (HOST && state.engine.hostSync && state.engine.native?.host?.valid) toast("Position follows your DAW — move the DAW playhead, or turn off “Follow DAW”.");
+      else await state.engine.seek(toTime(e.clientX));
     }
     startX = null; dragging = false;
     renderLoopRegions(); updatePlayheads();
@@ -466,6 +597,18 @@ $("#recombineBtn").addEventListener("click", async () => {
   const levels = state.engine.levels();
   if (!Object.values(levels).some((v) => v > 0)) { toast("Everything is muted — nothing to bounce.", "error"); return; }
   btn.classList.add("disabled"); btn.textContent = "Bouncing…";
+  if (HOST) {
+    // In the DAW: bounce to disk and put it on the drag dock.
+    try {
+      const r = await (await api(`/api/tracks/${state.track.id}/recombine?as_path=true`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ levels }),
+      })).json();
+      await bridge.call("sf_addDragFile", { id: "recombined", label: "Recombined", path: r.path });
+      toast(`Bounced ${r.file_name} — drag "Recombined" from the dock into your DAW.`);
+    } catch (e) { toast(`Recombine failed: ${e.message}`, "error"); }
+    btn.classList.remove("disabled"); btn.textContent = "Recombine";
+    return;
+  }
   try {
     const r = await api(`/api/tracks/${state.track.id}/recombine`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ levels }),
@@ -484,7 +627,7 @@ $("#recombineBtn").addEventListener("click", async () => {
 function teardownMixer() {
   clearTimeout(state.pollTimer);
   cancelAnimationFrame(state.raf);
-  if (state.engine) { state.engine.reset(); state.engine.ctx.close?.(); }
+  if (state.engine) { state.engine.reset(); state.engine.ctx?.close?.(); }
   state.engine = null; state.mixPeaks = null; state.mixBuffer = null;
   state.lanes.clear();
   $("#lanes").replaceChildren();
@@ -540,6 +683,15 @@ function markHistoryActive() {
 // ---------------------------------------------------------------- boot
 (async function boot() {
   refreshHistory();
+  if (HOST) {
+    // Each plug-in instance restores its own track from the DAW session.
+    $("#zipBtn").addEventListener("click", (e) => { e.preventDefault(); if (state.lanes.size) bridge.call("sf_reveal", [...state.lanes.values()].find((l) => l.entry.status === "ok")?.entry.id); });
+    try {
+      state.session = await bridge.call("sf_getSession");
+      if (state.session?.trackId) openTrack(await (await api(`/api/tracks/${state.session.trackId}`)).json());
+    } catch (e) { toast(`Could not restore the plug-in session: ${e.message}`, "error"); }
+    return;
+  }
   let last = null;
   try { last = localStorage.getItem(LS_LAST); } catch { /* ignore */ }
   if (last) {

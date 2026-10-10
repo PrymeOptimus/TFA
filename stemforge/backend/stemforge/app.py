@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import analysis, pipeline
+from . import analysis, pipeline, stretch
 from .audio_io import DecodeError, probe_title, read_wav, transcode_to_wav
 from .config import ALLOWED_EXTENSIONS, Settings, get_settings
 from .separation import Separator, build_separator
@@ -30,6 +30,11 @@ REMIX_TARGETS = {"replace", "extend", "cover"}
 
 class SendRequest(BaseModel):
     target: str
+
+
+class RenderRequest(BaseModel):
+    # Target tempo. None / missing = original tempo (no stretching).
+    bpm: float | None = None
 
 
 class RecombineRequest(BaseModel):
@@ -124,6 +129,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             stems_dir = store.stems_dir(track_id)
             shutil.rmtree(stems_dir, ignore_errors=True)
             (store.dir(track_id) / "stems.zip").unlink(missing_ok=True)
+            (store.dir(track_id) / "peaks.json").unlink(missing_ok=True)
+            shutil.rmtree(store.dir(track_id) / "rendered", ignore_errors=True)
             results = pipeline.run(audio, sr, separator, stems_dir, meta["title"], a.get("bpm"),
                                    a.get("key_short"), settings, progress)
             store.update(track_id, status="done", progress=1.0, stage="Done", stems=results,
@@ -220,7 +227,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"sent": True, "target": target, "stem": stem_id, "response": body}
 
     @app.post("/api/tracks/{track_id}/recombine")
-    def recombine(track_id: str, req: RecombineRequest):
+    def recombine(track_id: str, req: RecombineRequest, as_path: bool = False):
         import numpy as np
         from .audio_io import stem_filename, write_wav
         meta = _load(store, track_id)
@@ -244,8 +251,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         name = stem_filename(meta["title"], "Recombined", a.get("bpm"), a.get("key_short"))
         out = store.dir(track_id) / name
         write_wav(out, mix, sr, settings.wav_subtype)
+        if as_path:
+            return {"path": str(out), "file_name": name, "peak_normalized": peak > 1.0}
         return FileResponse(out, media_type="audio/wav", filename=name,
                             headers={"X-Peak-Normalized": "1" if peak > 1.0 else "0"})
+
+    @app.post("/api/tracks/{track_id}/render")
+    def render(track_id: str, req: RenderRequest):
+        """Absolute paths of every written stem, optionally time-stretched to `bpm`.
+        Used by the DAW plugin (local playback, drag-out at host tempo)."""
+        meta = _load(store, track_id)
+        if meta["status"] != "done":
+            raise HTTPException(409, "Separation not finished")
+        try:
+            return stretch.render(store, meta, req.bpm, settings)
+        except stretch.StretchError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.get("/api/tracks/{track_id}/stems/{stem_id}/path")
+    def stem_path(track_id: str, stem_id: str):
+        meta = _load(store, track_id)
+        entry = _stem_entry(meta, stem_id)
+        return {"path": str(store.stems_dir(track_id) / entry["download_name"]),
+                "file_name": entry["download_name"]}
+
+    @app.get("/api/tracks/{track_id}/peaks")
+    def peaks(track_id: str, buckets: int = 1600):
+        # Before separation finishes this returns the mix only (and is not cached).
+        meta = _load(store, track_id)
+        return stretch.peaks(store, meta, max(200, min(buckets, 4000)))
 
     @app.get("/api/history")
     def history():

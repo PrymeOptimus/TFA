@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 stemforge/backend/data/
 .venv/
+stemforge/plugin/build/
+*.egg-info/

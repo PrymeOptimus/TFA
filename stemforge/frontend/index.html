@@ -88,6 +88,13 @@
           <a class="btn primary" id="zipBtn" download>Download all</a>
         </div>
       </div>
+      <div id="syncPanel" class="sync-panel" hidden>
+        <label class="switch"><input type="checkbox" id="syncFollow" checked><span>Follow DAW transport</span></label>
+        <label class="switch"><input type="checkbox" id="syncStretch" checked><span>Stretch to DAW tempo</span></label>
+        <label class="num">Start at bar <input type="number" id="syncStartBar" min="1" step="1" value="1"></label>
+        <label class="num">Nudge <input type="number" id="syncNudge" step="1" value="0"> ms</label>
+        <span id="syncStatus" class="sync-status"></span>
+      </div>
       <div id="liteNote" class="notice info" hidden>Lite playback (22 kHz) is on to save memory on this device. Downloads and Recombine are always full quality.</div>
       <div id="loadNote" class="notice info" hidden></div>
       <div class="lanes" id="lanes"></div>

@@ -25,29 +25,34 @@ def _to_mono(audio: np.ndarray, sr: int) -> np.ndarray:
     return mono.astype(np.float32)
 
 
-def estimate_tempo(y: np.ndarray) -> tuple[float | None, np.ndarray]:
+def estimate_tempo(y: np.ndarray) -> tuple[float | None, np.ndarray, float]:
     """Beat-track, then refine: snap each beat to its local onset peak and fit a
-    line through beat times. Removes the frame-grid quantisation of raw tempo."""
+    line through beat times. Removes the frame-grid quantisation of raw tempo.
+
+    Also returns the beat-grid phase (seconds from file start to the first beat
+    on the fitted grid), used by the DAW plugin to line the song up with the bar grid."""
     hop = 128
     onset_env = librosa.onset.onset_strength(y=y, sr=ANALYSIS_SR, hop_length=hop)
     if not np.any(onset_env > 0):
-        return None, onset_env
+        return None, onset_env, 0.0
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=ANALYSIS_SR, hop_length=hop)
     bpm = float(np.atleast_1d(tempo)[0])
+    phase = float(beats[0] * hop / ANALYSIS_SR) if len(beats) else 0.0
     if len(beats) >= 8:
         w = int(0.04 * ANALYSIS_SR / hop)
         snapped = [max(0, f - w) + int(np.argmax(onset_env[max(0, f - w):f + w + 1])) for f in beats]
-        slope = np.polyfit(np.arange(len(snapped)), np.array(snapped) * hop / ANALYSIS_SR, 1)[0]
+        slope, intercept = np.polyfit(np.arange(len(snapped)), np.array(snapped) * hop / ANALYSIS_SR, 1)
         if slope > 0 and abs(60 / slope - bpm) < 0.08 * bpm:
             bpm = 60 / slope
+            phase = float(intercept % slope)
     if bpm <= 0:
-        return None, onset_env
+        return None, onset_env, 0.0
     # Fold into a conventional 70–180 BPM range.
     while bpm < 70:
         bpm *= 2
     while bpm > 180:
         bpm /= 2
-    return round(bpm, 1), onset_env
+    return round(bpm, 1), onset_env, round(phase, 4)
 
 
 def estimate_key(y: np.ndarray) -> dict:
@@ -116,12 +121,13 @@ def estimate_style(y: np.ndarray, bpm: float | None, onset_env: np.ndarray) -> d
 def analyze(audio: np.ndarray, sr: int) -> dict:
     duration = audio.shape[-1] / float(sr)
     y = _to_mono(audio, sr)
-    bpm, onset_env = estimate_tempo(y)
+    bpm, onset_env, grid_offset = estimate_tempo(y)
     key = estimate_key(y)
     style = estimate_style(y, bpm, onset_env)
     return {
         "duration_sec": round(duration, 2),
         "bpm": bpm,
+        "grid_offset_sec": grid_offset,
         "key": key["key"],
         "key_short": key["short"],
         "key_confidence": key["confidence"],

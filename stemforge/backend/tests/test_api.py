@@ -104,3 +104,40 @@ def test_history_limit(client):
     hist = [h["id"] for h in client.get("/api/history").json()]
     assert hist == [ids[2], ids[1]]
     assert client.get(f"/api/tracks/{ids[0]}").status_code == 404
+
+
+def test_plugin_endpoints(client):
+    meta = _upload(client, "Groove.wav", _wav_bytes(6, bpm=120))
+    tid = meta["id"]
+    assert "grid_offset_sec" in meta["analysis"]
+    assert client.post(f"/api/tracks/{tid}/render", json={}).status_code == 409  # not separated yet
+    client.post(f"/api/tracks/{tid}/separate")
+    done = _wait_done(client, tid)
+    ok_ids = {s["id"] for s in done["stems"] if s["status"] == "ok"}
+
+    # Original tempo: paths point at the separated stems.
+    r = client.post(f"/api/tracks/{tid}/render", json={"bpm": None}).json()
+    assert not r["stretched"] and {s["id"] for s in r["stems"]} == ok_ids
+    for s in r["stems"]:
+        assert sf.info(s["path"]).frames == 6 * SR
+
+    # Host tempo 132 -> every stem stretched, filename carries the new BPM.
+    r = client.post(f"/api/tracks/{tid}/render", json={"bpm": 132}).json()
+    orig = done["analysis"]["bpm"]
+    assert r["stretched"] and r["bpm"] == 132 and abs(r["ratio"] - 132 / orig) < 1e-4
+    for s in r["stems"]:
+        assert "_132BPM_" in s["file_name"]
+        frames = sf.info(s["path"]).frames
+        assert abs(frames - 6 * SR / r["ratio"]) < 0.02 * SR, (s["id"], frames)
+
+    assert client.post(f"/api/tracks/{tid}/render", json={"bpm": 400}).status_code == 400
+
+    p = client.get(f"/api/tracks/{tid}/peaks?buckets=400").json()
+    assert p["buckets"] == 400 and len(p["mix"]) == 800 and set(p["stems"]) == ok_ids
+    assert max(p["mix"]) <= 1000 and max(p["mix"]) > 100
+
+    path = client.get(f"/api/tracks/{tid}/stems/vocals/path").json()["path"]
+    assert path.endswith(".wav")
+    rc = client.post(f"/api/tracks/{tid}/recombine?as_path=true",
+                     json={"levels": {i: 1.0 for i in ok_ids}}).json()
+    assert rc["file_name"].startswith("Groove_Recombined_") and sf.info(rc["path"]).frames == 6 * SR

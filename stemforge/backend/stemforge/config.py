@@ -12,7 +12,9 @@ def _env(name: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class Settings:
-    data_dir: Path = field(default_factory=lambda: Path(_env("STEMFORGE_DATA_DIR", "./data")).resolve())
+    # Shared by the web app and the DAW plug-in.
+    data_dir: Path = field(default_factory=lambda: Path(
+        _env("STEMFORGE_DATA_DIR", str(Path.home() / ".stemforge" / "data"))).expanduser().resolve())
     # auto | demucs | dsp
     engine: str = field(default_factory=lambda: _env("STEMFORGE_ENGINE", "auto"))
     demucs_model: str = field(default_factory=lambda: _env("STEMFORGE_DEMUCS_MODEL", "htdemucs_6s"))

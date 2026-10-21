@@ -1,0 +1,42 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres_local_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      PGPASSWORD: postgres_local_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Bootstrap database roles
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f infra/postgres/01-bootstrap.sql
+      - name: Prepare env
+        run: |
+          cp .env.example .env
+          sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32)|" .env
+          sed -i "s|^IP_HASH_SALT=.*|IP_HASH_SALT=$(openssl rand -hex 16)|" .env
+      - name: Migrations apply cleanly to an empty database, then seed
+        run: pnpm db:reset
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: Integration tests (A1–A6, real PostgreSQL, restricted runtime role)
+        run: pnpm test
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build + browser tests (A15)
+        run: pnpm test:e2e

@@ -54,6 +54,10 @@ fi
 if [ ! -d "$REA_DIR/.git" ]; then
   log "clone morluto/rea"
   GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 --branch "$REA_REF" https://github.com/morluto/rea "$REA_DIR"
+else
+  log "update morluto/rea to $REA_REF"
+  git -C "$REA_DIR" fetch -q --depth 1 origin "$REA_REF"
+  git -C "$REA_DIR" reset -q --hard FETCH_HEAD
 fi
 log "build REA"
 (

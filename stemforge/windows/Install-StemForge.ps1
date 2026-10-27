@@ -92,8 +92,14 @@ $models = Join-Path $InstallDir 'models'
 if ($SkipModels) {
     Warn 'Skipped. Models download on first use.'
 } else {
-    Run $py @('-m', 'stemforge', '--models', $models, 'download', '--quality', 'auto')
-    Ok "models in $models"
+    # downloads resume and retry on their own; a re-run also repairs truncated files
+    & $py -m stemforge --models $models download --quality auto
+    if ($LASTEXITCODE -eq 0) {
+        Ok "models in $models"
+    } else {
+        Warn 'Some models did not finish downloading (network). The install continues;'
+        Warn 'missing models download on first use, or re-run this installer to fetch them now.'
+    }
 }
 
 # 6. Ableton device

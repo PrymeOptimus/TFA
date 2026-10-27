@@ -43,6 +43,69 @@ def models_for(mode, quality):
     return [DEMUCS_6 if mode == "6stem" else DEMUCS_FAST]
 
 
+def robust_download(url, output_path, verify_existing=False, attempts=6, timeout=60, log=lambda msg: None):
+    """Download url to output_path via a .part file with resume, retries and a size check.
+
+    audio-separator's own downloader writes straight to the final name and skips any file
+    that exists, so one dropped connection leaves a truncated model that is never repaired.
+    """
+    import time
+
+    import requests
+
+    out = Path(output_path)
+    if out.is_file():
+        if not verify_existing:
+            return
+        try:
+            expected = int(requests.head(url, allow_redirects=True, timeout=timeout).headers.get("content-length", 0))
+        except requests.RequestException:
+            return  # offline: keep what we have
+        if not expected or out.stat().st_size == expected:
+            return
+        log("Re-downloading truncated %s (%d of %d bytes)" % (out.name, out.stat().st_size, expected))
+        out.unlink()
+
+    part = out.with_name(out.name + ".part")
+    expected = None
+    for attempt in range(1, attempts + 1):
+        have = part.stat().st_size if part.exists() else 0
+        headers = {"Range": "bytes=%d-" % have} if have else {}
+        try:
+            with requests.get(url, stream=True, timeout=timeout, headers=headers, allow_redirects=True) as r:
+                if r.status_code == 416:  # already complete
+                    break
+                r.raise_for_status()
+                if r.status_code != 206:
+                    have = 0  # server ignored Range: start over
+                length = int(r.headers.get("content-length", 0))
+                expected = have + length if length else None
+                with open(part, "ab" if have else "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1 << 16):
+                        f.write(chunk)
+            if expected is None or part.stat().st_size >= expected:
+                break
+            raise IOError("incomplete download (%d of %d bytes)" % (part.stat().st_size, expected))
+        except (requests.RequestException, IOError) as e:
+            if attempt == attempts:
+                raise RuntimeError("Download of %s failed after %d attempts: %s" % (out.name, attempts, e))
+            wait = min(30, 2 ** attempt)
+            log("Connection dropped (%s); resuming in %ds (attempt %d/%d)" % (e.__class__.__name__, wait, attempt + 1, attempts))
+            time.sleep(wait)
+    if expected is not None and part.stat().st_size != expected:
+        raise RuntimeError("Download of %s is %d bytes, expected %d" % (out.name, part.stat().st_size, expected))
+    part.replace(out)
+
+
+def make_separator(verify_existing=False, log=lambda msg: None, **kwargs):
+    """An audio-separator Separator whose model downloads go through robust_download."""
+    from audio_separator.separator import Separator
+
+    sep = Separator(log_level=30, **kwargs)
+    sep.download_file_if_not_exists = lambda url, path: robust_download(url, path, verify_existing, log=log)
+    return sep
+
+
 class AudioSeparatorBackend:
     """Thin wrapper so the pipeline can be tested with a fake backend."""
 
@@ -52,12 +115,10 @@ class AudioSeparatorBackend:
         self._loaded = None
 
     def run(self, model_file, input_wav, out_dir, prefix):
-        from audio_separator.separator import Separator
-
         out_dir = Path(out_dir)
         if self._separator is None or self._separator.output_dir != str(out_dir):
-            self._separator = Separator(log_level=30, model_file_dir=self.models_dir,
-                                        output_dir=str(out_dir), output_format="WAV")
+            self._separator = make_separator(model_file_dir=self.models_dir, output_dir=str(out_dir),
+                                             output_format="WAV")
             self._loaded = None
         if self._loaded != model_file:
             self._separator.load_model(model_file)

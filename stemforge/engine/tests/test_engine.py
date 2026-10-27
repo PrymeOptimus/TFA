@@ -156,3 +156,106 @@ def test_split_end_to_end_with_fake_backend(tmp_path, monkeypatch):
     assert manifest["quality"] == "fast" and "bpm" in manifest and manifest["key"]
     assert all((song / s["file"]).exists() for s in manifest["stems"])
     assert not (song / ".work").exists()
+
+
+# ---- model downloads -------------------------------------------------------------------------
+
+import http.server
+import threading
+
+
+class FlakyServer:
+    """Serves PAYLOAD with Range support; the first `drops` responses die halfway through."""
+
+    PAYLOAD = bytes(range(256)) * 4096  # 1 MiB
+
+    def __init__(self, drops=1, honor_range=True):
+        outer = self
+        self.drops, self.requests = drops, []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_HEAD(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(outer.PAYLOAD)))
+                self.end_headers()
+
+            def do_GET(self):
+                outer.requests.append(self.headers.get("Range"))
+                start = 0
+                rng = self.headers.get("Range")
+                if rng and honor_range:
+                    start = int(rng.split("=")[1].split("-")[0])
+                body = outer.PAYLOAD[start:]
+                self.send_response(206 if start else 200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if outer.drops > 0:
+                    outer.drops -= 1
+                    self.wfile.write(body[:len(body) // 2])
+                    self.wfile.flush()
+                    self.connection.shutdown(2)
+                    return
+                self.wfile.write(body)
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = "http://127.0.0.1:%d/model.ckpt" % self.httpd.server_address[1]
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.httpd.shutdown()
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    import time
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+
+@pytest.mark.parametrize("honor_range", [True, False])
+def test_download_resumes_after_dropped_connection(tmp_path, no_sleep, honor_range):
+    srv = FlakyServer(drops=2, honor_range=honor_range)
+    try:
+        out = tmp_path / "model.ckpt"
+        separate.robust_download(srv.url, out)
+        assert out.read_bytes() == FlakyServer.PAYLOAD
+        assert not (tmp_path / "model.ckpt.part").exists()
+        assert len(srv.requests) == 3
+        if honor_range:
+            assert srv.requests[0] is None and srv.requests[1].startswith("bytes=")
+    finally:
+        srv.close()
+
+
+def test_download_gives_up_and_leaves_no_final_file(tmp_path, no_sleep):
+    srv = FlakyServer(drops=99)
+    try:
+        out = tmp_path / "model.ckpt"
+        with pytest.raises(RuntimeError, match="failed after 3 attempts"):
+            separate.robust_download(srv.url, out, attempts=3)
+        assert not out.exists()  # a truncated model must never sit under the real name
+    finally:
+        srv.close()
+
+
+def test_verify_replaces_truncated_existing_file(tmp_path, no_sleep):
+    srv = FlakyServer(drops=0)
+    try:
+        out = tmp_path / "model.ckpt"
+        out.write_bytes(FlakyServer.PAYLOAD[:1000])  # what the old installer left behind
+        separate.robust_download(srv.url, out)       # split path: trusts existing files
+        assert out.stat().st_size == 1000
+        separate.robust_download(srv.url, out, verify_existing=True)
+        assert out.read_bytes() == FlakyServer.PAYLOAD
+    finally:
+        srv.close()
+
+
+def test_make_separator_routes_downloads_through_robust_download(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(separate, "robust_download", lambda url, path, verify, log: calls.append((url, path, verify)))
+    sep = separate.make_separator(verify_existing=True, model_file_dir=str(tmp_path), output_dir=str(tmp_path), info_only=True)
+    sep.download_file_if_not_exists("http://x/a.ckpt", str(tmp_path / "a.ckpt"))
+    assert calls == [("http://x/a.ckpt", str(tmp_path / "a.ckpt"), True)]

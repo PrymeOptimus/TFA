@@ -140,9 +140,8 @@ def cmd_download(args, rep):
     for q in qualities:
         for mode in args.modes:
             wanted += [m for m in separate.models_for(mode, q) if m not in wanted]
-    from audio_separator.separator import Separator
-
-    sep = Separator(log_level=30, model_file_dir=str(args.models), output_dir=str(args.models))
+    sep = separate.make_separator(verify_existing=True, log=rep.log,
+                                  model_file_dir=str(args.models), output_dir=str(args.models))
     for i, model in enumerate(wanted):
         rep.progress(i / max(1, len(wanted) + args.lyrics) * 100, "Downloading %s" % model)
         sep.download_model_files(model)

@@ -1,0 +1,4 @@
+pypdf>=4.2,<6
+cryptography>=42
+flask>=3.0,<4
+playwright>=1.44,<2

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intake Bridge</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6eb; --brand:#0f5f8c; --warn:#b45309; --bad:#b91c1c; --ok:#047857; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; background:var(--brand); color:#fff; }
+  header a { color:#fff; text-decoration:none; font-weight:600; }
+  main { max-width:1200px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:20px; margin-bottom:16px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; color:var(--muted); }
+  button, .btn { background:var(--brand); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.secondary { background:#e5e7eb; color:var(--ink); }
+  button.danger { background:var(--bad); }
+  input[type=text], input[type=password], textarea { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  label { font-size:13px; color:var(--muted); display:block; margin-bottom:3px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
+  .warn { color:var(--warn); } .bad { color:var(--bad); } .ok { color:var(--ok); }
+  .pill { font-size:12px; padding:2px 8px; border-radius:999px; background:#eef2f7; }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width: 900px) { .split { grid-template-columns:1fr; } }
+  iframe { width:100%; height:80vh; border:1px solid var(--line); border-radius:8px; }
+  .req label::after { content:" *"; color:var(--bad); }
+  .empty input { background:#fffbeb; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">Intake Bridge · ALOHA → Jane</a>
+  {% if unlocked %}
+  <span><a href="/audit" style="margin-right:16px">Audit</a>
+  <form method="post" action="/lock" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary">Lock</button></form></span>
+  {% endif %}
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

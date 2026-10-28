@@ -1,0 +1,9 @@
+# Never commit PHI, local settings, or browser sessions
+config/settings.json
+*.pdf
+!tests/fixtures/*.pdf
+*.rejected
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

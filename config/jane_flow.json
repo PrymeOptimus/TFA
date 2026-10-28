@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "Declarative browser flow for Jane App staff UI.",
+    "ALL selectors below are STARTING POINTS and must be verified against your Jane account before live use.",
+    "Verify with: python -m intake_bridge record   (opens Playwright codegen against your Jane URL, logged in)",
+    "Then run:    python -m intake_bridge push <record_id> --dry-run   (fills everything, saves nothing)",
+    "Template values: any canonical field in {braces}, plus {full_name}, {dob_mdy}, {dob_long}, {injury_date_mdy}, {phone_mobile_digits}, {base_url}.",
+    "Selector forms: {\"role\":\"button\",\"name\":\"Save\"} | {\"label\":\"First Name\"} | {\"placeholder\":\"Search\"} | {\"text\":\"...\"} | {\"css\":\"...\"}",
+    "Step flags: commit (skipped in dry-run, requires human approval first), optional (failures tolerated), skip_if_empty (\"{field}\"), group (upload_pdf can be disabled in settings)."
+  ],
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "name": "Make sure staff is logged in",
+      "action": "ensure_logged_in",
+      "url": "{base_url}/admin",
+      "logged_in_selector": {"role": "link", "name": "Patients"},
+      "timeout_s": 300
+    },
+    {"name": "Open patients", "action": "click", "selector": {"role": "link", "name": "Patients"}},
+    {"name": "Search patient", "action": "fill", "selector": {"placeholder": "Search"}, "value": "{first_name} {last_name}"},
+    {"name": "Let results load", "action": "wait_ms", "ms": 1500},
+    {
+      "name": "Existing patient? (matched on name + DOB)",
+      "action": "if_visible",
+      "selector": {"text": "{dob_mdy}"},
+      "timeout_ms": 4000,
+      "then": [
+        {"name": "Open existing patient", "action": "click", "selector": {"text": "{dob_mdy}"}}
+      ],
+      "else": [
+        {"name": "New patient", "action": "click", "selector": {"role": "button", "name": "New Patient"}},
+        {"name": "First name", "action": "fill", "selector": {"label": "First Name"}, "value": "{first_name}"},
+        {"name": "Last name", "action": "fill", "selector": {"label": "Last Name"}, "value": "{last_name}"},
+        {"name": "Preferred name", "action": "fill", "selector": {"label": "Preferred Name"}, "value": "{preferred_name}", "skip_if_empty": "{preferred_name}", "optional": true},
+        {"name": "Email", "action": "fill", "selector": {"label": "Email"}, "value": "{email}", "skip_if_empty": "{email}"},
+        {"name": "Mobile phone", "action": "fill", "selector": {"label": "Mobile Phone"}, "value": "{phone_mobile}", "skip_if_empty": "{phone_mobile}"},
+        {"name": "Home phone", "action": "fill", "selector": {"label": "Home Phone"}, "value": "{phone_home}", "skip_if_empty": "{phone_home}", "optional": true},
+        {"name": "Date of birth", "action": "type", "selector": {"label": "Birth Date"}, "value": "{dob_mdy}"},
+        {"name": "Sex", "action": "select", "selector": {"label": "Sex"}, "value": "{sex}", "skip_if_empty": "{sex}", "optional": true},
+        {"name": "Address", "action": "fill", "selector": {"label": "Address"}, "value": "{address_line1}", "skip_if_empty": "{address_line1}", "optional": true},
+        {"name": "City", "action": "fill", "selector": {"label": "City"}, "value": "{city}", "skip_if_empty": "{city}", "optional": true},
+        {"name": "State", "action": "fill", "selector": {"label": "Province / State"}, "value": "{state}", "skip_if_empty": "{state}", "optional": true},
+        {"name": "Zip", "action": "fill", "selector": {"label": "Postal / Zip Code"}, "value": "{zip}", "skip_if_empty": "{zip}", "optional": true},
+        {"name": "Emergency contact", "action": "fill", "selector": {"label": "Emergency Contact"}, "value": "{emergency_contact_name} {emergency_contact_phone}", "skip_if_empty": "{emergency_contact_name}", "optional": true},
+        {"name": "Referral source", "action": "fill", "selector": {"label": "Referred By"}, "value": "{referral_source}", "skip_if_empty": "{referral_source}", "optional": true},
+        {"name": "Save new patient", "action": "click", "selector": {"role": "button", "name": "Save"}, "commit": true},
+        {"name": "Wait for profile", "action": "wait_for", "selector": {"text": "{last_name}"}, "commit": true}
+      ]
+    },
+
+    {"name": "Open Files / Charts tab", "group": "upload_pdf", "action": "click", "selector": {"role": "link", "name": "Files"}, "commit": true},
+    {"name": "Attach ALOHA PDF", "group": "upload_pdf", "action": "upload", "selector": {"css": "input[type=file]"}, "commit": true},
+    {"name": "Confirm upload", "group": "upload_pdf", "action": "click", "selector": {"role": "button", "name": "Upload"}, "commit": true, "optional": true},
+
+    {
+      "_comment": "Intake form section. Labels must equal the question text of YOUR intake form in Jane (Settings > Forms). Add/remove steps to match.",
+      "name": "Open intake forms",
+      "group": "intake_form",
+      "action": "click",
+      "selector": {"role": "link", "name": "Intake Forms"},
+      "commit": true
+    },
+    {"name": "Start intake form on patient's behalf", "group": "intake_form", "action": "click", "selector": {"role": "button", "name": "Fill Out"}, "commit": true},
+    {"name": "Q: Chief complaint", "group": "intake_form", "action": "fill", "selector": {"label": "What brings you in today?"}, "value": "{chief_complaint}", "skip_if_empty": "{chief_complaint}", "commit": true},
+    {"name": "Q: Onset", "group": "intake_form", "action": "fill", "selector": {"label": "When did your symptoms begin?"}, "value": "{symptom_onset_mdy}", "skip_if_empty": "{symptom_onset}", "commit": true, "optional": true},
+    {"name": "Q: Pain level", "group": "intake_form", "action": "fill", "selector": {"label": "Pain level (0-10)"}, "value": "{pain_scale}", "skip_if_empty": "{pain_scale}", "commit": true, "optional": true},
+    {"name": "Q: Case type", "group": "intake_form", "action": "fill", "selector": {"label": "Is this related to an auto accident, work injury, or VA referral?"}, "value": "{case_type}", "skip_if_empty": "{case_type}", "commit": true, "optional": true},
+    {"name": "Q: Date of injury", "group": "intake_form", "action": "fill", "selector": {"label": "Date of injury"}, "value": "{injury_date_mdy}", "skip_if_empty": "{injury_date}", "commit": true, "optional": true},
+    {"name": "Q: Claim number", "group": "intake_form", "action": "fill", "selector": {"label": "Claim number"}, "value": "{claim_number}", "skip_if_empty": "{claim_number}", "commit": true, "optional": true},
+    {"name": "Q: Attorney", "group": "intake_form", "action": "fill", "selector": {"label": "Attorney name and phone"}, "value": "{attorney_name} {attorney_phone}", "skip_if_empty": "{attorney_name}", "commit": true, "optional": true},
+    {"name": "Q: Medications", "group": "intake_form", "action": "fill", "selector": {"label": "Current medications"}, "value": "{medications}", "skip_if_empty": "{medications}", "commit": true, "optional": true},
+    {"name": "Q: Allergies", "group": "intake_form", "action": "fill", "selector": {"label": "Allergies"}, "value": "{allergies}", "skip_if_empty": "{allergies}", "commit": true, "optional": true},
+    {"name": "Q: Surgeries", "group": "intake_form", "action": "fill", "selector": {"label": "Past surgeries"}, "value": "{surgeries}", "skip_if_empty": "{surgeries}", "commit": true, "optional": true},
+    {"name": "Q: Medical history", "group": "intake_form", "action": "fill", "selector": {"label": "Medical history"}, "value": "{medical_history}", "skip_if_empty": "{medical_history}", "commit": true, "optional": true},
+    {"name": "Final human check of intake form", "group": "intake_form", "action": "review", "message": "Check the intake form in Jane for {full_name}, then approve to submit."},
+    {"name": "Submit intake form", "group": "intake_form", "action": "click", "selector": {"role": "button", "name": "Submit"}, "commit": true}
+  ]
+}

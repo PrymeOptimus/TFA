@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="card">
+  <h3 style="margin-top:0">Audit log integrity</h3>
+  <p class="{{ 'ok' if ok else 'bad' }}"><strong>{{ msg }}</strong> · {{ n }} entries checked</p>
+  <p style="color:var(--muted)">The audit log is hash-chained and contains no PHI (record IDs, actions, users and outcomes only). Export it with <code>python -m intake_bridge audit-export</code>.</p>
+</div>
+{% endblock %}

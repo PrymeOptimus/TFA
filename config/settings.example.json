@@ -1,0 +1,15 @@
+{
+  "_comment": "Copy to config/settings.json and edit. data_dir must be on a BitLocker/FileVault-encrypted drive.",
+  "jane_base_url": "https://YOURCLINIC.janeapp.com",
+  "data_dir": "%LOCALAPPDATA%/IntakeBridge",
+  "watch_folder": "~/Downloads/AlohaIntakes",
+  "idle_lock_seconds": 900,
+  "retention_hours_after_push": 0,
+  "max_retention_days": 7,
+  "upload_source_pdf": true,
+  "require_review_before_commit": true,
+  "headless": false,
+  "chromium_executable": null,
+  "host": "127.0.0.1",
+  "port": 8765
+}

@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock Jane</title></head>
+<body>
+<!-- Test double for Jane's staff UI. Records what was saved in window.__saved. -->
+<nav><a href="#patients" id="nav-patients">Patients</a></nav>
+<script>window.__saved = []; window.__existing = new URLSearchParams(location.search).get("existing");</script>
+
+<section id="patients">
+  <input placeholder="Search patients" id="search">
+  <div id="results"></div>
+  <button id="new">New Patient</button>
+</section>
+
+<section id="newform" hidden>
+  <label>First Name <input id="fn"></label>
+  <label>Last Name <input id="ln"></label>
+  <label>Preferred Name <input id="pn"></label>
+  <label>Email <input id="em"></label>
+  <label>Mobile Phone <input id="mp"></label>
+  <label>Birth Date <input id="dob"></label>
+  <label>Sex <select id="sex"><option></option><option>Female</option><option>Male</option></select></label>
+  <label>Address <input id="addr"></label>
+  <label>City <input id="city"></label>
+  <label>Province / State <input id="st"></label>
+  <label>Postal / Zip Code <input id="zip"></label>
+  <button id="save">Save</button>
+</section>
+
+<section id="profile" hidden>
+  <h2 id="pname"></h2>
+  <a href="#files" id="files-link">Files</a>
+  <input type="file" id="file" hidden>
+  <button id="upload">Upload</button>
+  <a href="#intake" id="intake-link">Intake Forms</a>
+  <button id="fillout">Fill Out</button>
+  <form id="intake" hidden onsubmit="return false">
+    <label>What brings you in today? <textarea id="q1"></textarea></label>
+    <label>Allergies <input id="q2"></label>
+    <button id="submit">Submit</button>
+  </form>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+$("search").addEventListener("input", e => {
+  $("results").innerHTML = window.__existing && e.target.value ? `<a href="#p1" id="hit">Existing Person ${window.__existing}</a>` : "";
+  const hit = $("hit"); if (hit) hit.onclick = () => { $("profile").hidden = false; $("pname").textContent = "Existing"; };
+});
+$("new").onclick = () => { $("newform").hidden = false; };
+$("save").onclick = () => {
+  window.__saved.push({type: "patient", fn: $("fn").value, ln: $("ln").value, em: $("em").value, mp: $("mp").value,
+                       dob: $("dob").value, sex: $("sex").value, st: $("st").value, zip: $("zip").value});
+  $("newform").hidden = true; $("profile").hidden = false; $("pname").textContent = $("ln").value;
+};
+$("file").addEventListener("change", e => { window.__file = e.target.files[0] && e.target.files[0].name; });
+$("upload").onclick = () => { window.__saved.push({type: "file", name: window.__file}); };
+$("fillout").onclick = () => { $("intake").hidden = false; };
+$("submit").onclick = () => { window.__saved.push({type: "intake", q1: $("q1").value, q2: $("q2").value}); };
+</script>
+</body></html>

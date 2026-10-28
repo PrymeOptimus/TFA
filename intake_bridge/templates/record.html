@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="card" id="job" {% if not job %}hidden{% endif %}>
+  <strong>Jane push:</strong> <span id="job-status">{{ job.status if job }}</span>
+  <span id="job-mode" class="pill">{{ ("dry run" if job.dry_run else "LIVE") if job }}</span>
+  <p id="job-message">{{ job.message if job }}</p>
+  <form method="post" action="/record/{{ rec.id }}/review" id="review" hidden>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="warn" id="review-message"></p>
+    <button name="decision" value="approve">Approve</button>
+    <button name="decision" value="reject" class="danger">Reject / stop</button>
+  </form>
+  <ul id="job-notes"></ul>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3 style="margin-top:0">{{ rec.source_name }} <span class="pill">{{ rec.status }}</span></h3>
+    {% if rec.last_error %}<p class="bad">Last error: {{ rec.last_error }}</p>{% endif %}
+    {% for w in rec.warnings %}<p class="warn" style="margin:2px 0">⚠ {{ w }}</p>{% endfor %}
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="grid" style="margin-top:12px">
+      {% for k in canonical %}
+        <div class="{{ 'req' if k in required }} {{ 'empty' if not rec.fields.get(k) }}">
+          <label for="f-{{ k }}">{{ k.replace("_"," ") }}</label>
+          <input type="text" id="f-{{ k }}" name="{{ k }}" value="{{ rec.fields.get(k,'') }}" autocomplete="off">
+        </div>
+      {% endfor %}
+      </div>
+      <p style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap">
+        <button name="then" value="save" class="secondary">Save</button>
+        <button name="then" value="dry">Save + dry run in Jane</button>
+        <button name="then" value="live" onclick="return confirm('Push to Jane for real? You will still approve in the browser before anything saves.')">Save + push to Jane</button>
+      </p>
+    </form>
+    <form method="post" action="/record/{{ rec.id }}/delete" onsubmit="return confirm('Permanently delete this staged intake?')">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Delete</button>
+    </form>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Original PDF</h3>
+    <iframe src="/record/{{ rec.id }}/pdf" title="Original intake PDF"></iframe>
+  </div>
+</div>
+
+<script>
+(function () {
+  const box = document.getElementById("job"), st = document.getElementById("job-status"),
+        msg = document.getElementById("job-message"), rv = document.getElementById("review"),
+        rvm = document.getElementById("review-message"), notes = document.getElementById("job-notes"),
+        mode = document.getElementById("job-mode");
+  const labels = {running:"Working in Jane…", awaiting_login:"Log in to Jane in the browser window that opened.",
+                  awaiting_review:"Waiting for your approval", done:"Done", error:"Error", rejected:"Stopped by staff", starting:"Starting…"};
+  async function poll() {
+    const r = await fetch("/record/{{ rec.id }}/job", {cache:"no-store"});
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.status === "none") return;
+    box.hidden = false;
+    st.textContent = labels[j.status] || j.status;
+    mode.textContent = j.dry_run ? "dry run" : "LIVE";
+    msg.textContent = j.message || "";
+    rv.hidden = j.status !== "awaiting_review";
+    rvm.textContent = j.review_message || "";
+    notes.innerHTML = "";
+    (j.notes || []).forEach(n => { const li = document.createElement("li"); li.textContent = n; notes.appendChild(li); });
+    if (!["done","error","rejected"].includes(j.status)) setTimeout(poll, 1500);
+  }
+  poll();
+})();
+</script>
+{% endblock %}

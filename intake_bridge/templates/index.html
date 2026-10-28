@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block body %}
+{% if error %}<div class="card bad">{{ error }}</div>{% endif %}
+<div class="card">
+  <h3 style="margin-top:0">New intake</h3>
+  <form method="post" action="/upload" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="file" name="pdf" accept="application/pdf" multiple required>
+    <button>Extract</button>
+  </form>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:0">Upload the ALOHA intake PDF. It is encrypted on this computer and never sent anywhere except into Jane through your own logged-in browser.</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">Queue</h3>
+  {% if not records %}<p style="color:var(--muted)">Nothing staged.</p>{% else %}
+  <table>
+    <tr><th>Patient</th><th>DOB</th><th>Status</th><th>Warnings</th><th></th></tr>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.fields.get("last_name","") }}, {{ r.fields.get("first_name","") }}</td>
+      <td>{{ r.fields.get("dob","") }}</td>
+      <td><span class="pill">{{ jobs[r.id].status if r.id in jobs and jobs[r.id].status not in ("done",) else r.status }}</span></td>
+      <td class="{{ 'warn' if r.warnings }}">{{ r.warnings|length }}</td>
+      <td><a class="btn" href="/record/{{ r.id }}">Review</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -117,6 +117,21 @@ table.hyd td.num{font-weight:700;color:var(--purple-d)}
 .wear .nope h3{color:var(--red)}
 .wear .item{display:flex;gap:10px;align-items:center;margin:6px 0;font-size:9.6pt;line-height:1.3}
 .wear .item svg{flex:0 0 36px;width:36px;height:36px}
+
+/* commitment */
+.commit{list-style:none;counter-reset:c;margin:4px 0 8px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.commit li{counter-increment:c;display:grid;grid-template-columns:26px 1fr 78px;gap:10px;align-items:center;padding:6.5px 12px;border-top:1px solid var(--line);font-size:9.3pt;line-height:1.35}
+.commit li:first-child{border-top:0}
+.commit li:nth-child(even){background:#FAFAFC}
+.commit li::before{content:counter(c);width:22px;height:22px;border-radius:50%;background:var(--purple);color:#fff;font-weight:700;font-size:8.5pt;display:flex;align-items:center;justify-content:center}
+.commit .ini{border-bottom:1.5px solid #9AA0AD;height:22px;position:relative}
+.commit .ini::after{content:"Initials";position:absolute;bottom:3px;left:2px;color:#B4B8C2 !important;font-size:6.5pt;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.sig{display:grid;grid-template-columns:2fr 1fr;gap:12px 22px;margin-top:14px}
+.sig .ln{border-bottom:1.5px solid var(--ink);height:30px}
+.sig .lb{font-size:7.6pt;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:3px}
+.office{margin-top:14px;border:1px dashed #B7A3D8;border-radius:10px;padding:8px 12px;font-size:8.4pt;color:var(--muted);display:flex;gap:18px;align-items:center}
+.office b{color:var(--purple);letter-spacing:.1em;text-transform:uppercase;font-size:7.6pt}
+.office .box{display:inline-block;width:11px;height:11px;border:1.5px solid #9AA0AD;border-radius:2px;vertical-align:-1px;margin-right:4px}
 </style>
 </head>
 <body>
@@ -229,6 +244,7 @@ table.hyd td.num{font-weight:700;color:var(--purple-d)}
       <a><span class="n">07</span><span class="t">What to Drink</span><span class="d"></span><span class="pg">7</span></a>
       <a><span class="n">08</span><span class="t">Postural Recommendations</span><span class="d"></span><span class="pg">8</span></a>
       <a><span class="n">09</span><span class="t">Special Reminder</span><span class="d"></span><span class="pg">10</span></a>
+      <a><span class="n">10</span><span class="t">Patient Commitment</span><span class="d"></span><span class="pg">11</span></a>
     </nav>
 
     <h2>Your Program at a Glance</h2>
@@ -757,6 +773,38 @@ table.hyd td.num{font-weight:700;color:var(--purple-d)}
     <p style="margin-top:6px"><strong>It is imperative that you avoid these positions at all costs</strong>, so that throughout your treatment program we are not in a tug-of-war with your body.</p>
   </div>
   <div class="ftr"><div class="logos"><img class="dca" src="assets/dca-logo.png" alt=""><span class="sep"></span><img class="tfz" src="assets/tfz-logo.png" alt=""></div><div class="addr">419 Cherry Street · Macon, Georgia 31201<br>Ph: (478) 746-7246</div><div class="pg">10</div></div>
+</section>
+
+<!-- ============ PAGE 11 : PATIENT COMMITMENT ============ -->
+<section class="page">
+  <div class="hdr"><div class="kicker"><b>10</b> · Patient Commitment</div><img src="assets/tfz-logo.png" alt=""></div>
+  <div class="body">
+    <h1>Patient <span class="accent">Commitment</span></h1><div class="h1rule"></div>
+    <p style="font-size:9.6pt">Your results depend on consistency. Please read each statement, initial it, and sign below. Ask a team member about anything that is unclear before you sign.</p>
+    <ol class="commit">
+      <li><span>I will attend all of my <strong>24–30 decompression sessions over 8–10 weeks</strong> and avoid lapses in my program.</span><span class="ini"></span></li>
+      <li><span>I understand my <strong>appointment time is the same each day</strong> and I will arrive a few minutes early.</span><span class="ini"></span></li>
+      <li><span>I understand that arriving <strong>10 minutes late counts as a missed appointment</strong>, and missed appointments are not refunded or made up unless there is a cancellation.</span><span class="ini"></span></li>
+      <li><span>I will follow the <strong>dress requirements</strong>: closed-toe shoes; no skirts, dresses, shorts, sandals, or slippery clothing; piercings below the neck removed before I arrive.</span><span class="ini"></span></li>
+      <li><span>My adult visitors will stay in reception, no children will enter the suite, and <strong>my phone will be off</strong> during treatment.</span><span class="ini"></span></li>
+      <li><span>After each session: <strong>no lifting or strenuous activity for at least 6 hours</strong> and <strong>no bending or twisting for at least 3 hours</strong>.</span><span class="ini"></span></li>
+      <li><span>During weeks 1–2: <strong>light walking only</strong> — no running, strenuous exercise, or sexual activity.</span><span class="ini"></span></li>
+      <li><span>I will <strong>not receive outside therapy</strong> for this condition without first discussing it with Dr. Nissa.</span><span class="ini"></span></li>
+      <li><span>I will <strong>drink at least half my body weight (lb) in ounces of water daily</strong> for 12 weeks, unless Dr. Nissa instructs otherwise.</span><span class="ini"></span></li>
+      <li><span>I will follow the <strong>bracing, standing, sitting, and sleeping</strong> recommendations in this guide.</span><span class="ini"></span></li>
+    </ol>
+    <p style="font-size:9.6pt;margin-top:10px">By signing, I confirm that I have read and understand these Home Care Recommendations and commit to following them throughout my treatment program.</p>
+    <div class="sig">
+      <div><div class="ln"></div><div class="lb">Patient name (print)</div></div>
+      <div><div class="ln"></div><div class="lb">Date of birth</div></div>
+      <div><div class="ln"></div><div class="lb">Patient signature</div></div>
+      <div><div class="ln"></div><div class="lb">Date</div></div>
+      <div><div class="ln"></div><div class="lb">Staff witness (print &amp; sign)</div></div>
+      <div><div class="ln"></div><div class="lb">Date</div></div>
+    </div>
+    <div class="office"><b>Office use</b><span><span class="box"></span>Copy given to patient</span><span><span class="box"></span>Scanned to patient chart</span><span>Program start date: ____________</span></div>
+  </div>
+  <div class="ftr"><div class="logos"><img class="dca" src="assets/dca-logo.png" alt=""><span class="sep"></span><img class="tfz" src="assets/tfz-logo.png" alt=""></div><div class="addr">419 Cherry Street · Macon, Georgia 31201<br>Ph: (478) 746-7246</div><div class="pg">11</div></div>
 </section>
 
 </body>

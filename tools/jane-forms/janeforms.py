@@ -81,9 +81,26 @@ def load_rows(path):
     return data if isinstance(data, list) else [data]
 
 
+def widget_on_states(reader):
+    """{field name: on-state} read from each checkbox widget's appearance (e.g. /Yes_xsa)."""
+    states = {}
+    for page in reader.pages:
+        for a in page.get("/Annots") or []:
+            a = a.get_object()
+            parent = a.get("/Parent")
+            name = a.get("/T") or (parent.get_object().get("/T") if parent else None)
+            normal = (a.get("/AP") or {}).get("/N")
+            if name is not None and hasattr(normal, "keys"):
+                on = [k for k in normal.keys() if k != "/Off"]
+                if on:
+                    states.setdefault(str(name), str(on[0]))
+    return states
+
+
 def form_fields(reader):
     """{name: {"type": "text"|"checkbox"|"radio"|"choice", "on": on-state}}"""
     out = {}
+    widget_states = None
     for name, f in (reader.get_fields() or {}).items():
         ft = f.get("/FT")
         kind = {"/Tx": "text", "/Ch": "choice", "/Sig": "signature"}.get(ft, "text")
@@ -91,9 +108,24 @@ def form_fields(reader):
         if ft == "/Btn":
             kind = "radio" if int(f.get("/Ff", 0)) & (1 << 15) else "checkbox"
             states = [s for s in (f.get("/_States_") or []) if s != "/Off"]
+            if not states:
+                widget_states = widget_states if widget_states is not None else widget_on_states(reader)
+                states = [widget_states[str(name)]] if str(name) in widget_states else []
             on = str(states[0]) if states else "/Yes"
         out[str(name)] = {"type": kind, "on": on}
     return out
+
+
+def apply_aliases(row, aliases):
+    """Fill each standard column from the first alternative header present in the export."""
+    row = dict(row)
+    for standard, alternatives in (aliases or {}).items():
+        if not row.get(standard):
+            for alt in alternatives or []:
+                if row.get(alt):
+                    row[standard] = row[alt]
+                    break
+    return row
 
 
 def overlay_pdf(items, reader, row):
@@ -211,7 +243,10 @@ def cmd_grid(args):
 def cmd_fill(args):
     map_path = Path(args.map)
     mapping = yaml.safe_load(map_path.read_text(encoding="utf-8"))
-    rows = load_rows(args.data)
+    columns = map_path.parent / "columns.yaml"
+    aliases = yaml.safe_load(columns.read_text(encoding="utf-8")) if columns.exists() else {}
+    today = datetime.now().strftime("%m/%d/%Y")
+    rows = [apply_aliases({"Today": today, **r}, aliases) for r in load_rows(args.data)]
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     warned = False

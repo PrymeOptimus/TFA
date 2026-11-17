@@ -129,3 +129,32 @@ def test_unparseable_date_is_kept_not_guessed():
 def test_grid_for_flat_forms(flat):
     assert jf.main(["grid", str(flat)]) == 0
     assert len(PdfReader(str(flat.with_suffix(".grid.pdf"))).pages) == 2
+
+
+def test_checkbox_on_state_read_from_widget_appearance():
+    # the clinic's records request form gives each checkbox its own on-state (/Yes_xsa ...),
+    # stored only on the widget; filling with a generic /Yes would leave boxes unticked
+    form = Path(__file__).parent / "forms" / "Inter_Office_Records_Request.pdf"
+    f = jf.form_fields(PdfReader(str(form)))
+    assert f["checkbox_6dlpl"] == {"type": "checkbox", "on": "/Yes_xsa"}
+    assert all(v["on"].startswith("/Yes_") for v in f.values() if v["type"] == "checkbox")
+
+
+def test_aliases_map_export_headers_and_today_is_available(tmp_path, fillable):
+    (tmp_path / "columns.yaml").write_text(yaml.safe_dump({"First Name": ["first_name"], "Date of Birth": ["DOB"]}))
+    data = tmp_path / "p.json"
+    data.write_text(json.dumps({"first_name": "Alias", "DOB": "2000-01-31", "Last Name": "Case"}))
+    m = write_map(tmp_path, fillable, fields={"PatientName": "{First Name} {Last Name}",
+                                               "DOB": {"value": "{Date of Birth}", "date": "%m/%d/%Y"}})
+    jf.main(["fill", str(m), str(data), "--out", str(tmp_path / "o")])
+    v = values(tmp_path / "o" / "Case_Alias.pdf")
+    assert v["PatientName"] == "Alias Case" and v["DOB"] == "01/31/2000"
+    assert jf.apply_aliases({"Today": "x", "a": "1"}, {"b": ["a"]})["b"] == "1"
+
+
+@pytest.mark.parametrize("map_file", sorted((Path(__file__).parent / "forms").glob("*.map.yaml")), ids=lambda p: p.stem)
+def test_clinic_maps_only_name_fields_that_exist(map_file, capsys, tmp_path):
+    data = tmp_path / "p.json"
+    data.write_text(json.dumps({"First Name": "A", "Last Name": "B"}))
+    assert jf.main(["fill", str(map_file), str(data), "--out", str(tmp_path / "o")]) == 0
+    assert "WARNING" not in capsys.readouterr().out

@@ -1,0 +1,11 @@
+# Standard column name: [other names your Jane export or spreadsheet might use]
+# When the first Jane export arrives, add its exact header names here. The form maps never change.
+First Name: [first_name, Patient First Name, Preferred Name]
+Last Name: [last_name, Patient Last Name]
+Date of Birth: [DOB, Birth Date, Birthdate, date_of_birth]
+Patient ID: [Patient Number, "Patient #", Chart Number, id]
+Insurance Company: [Insurer, Insurance, Primary Insurer, Payer]
+Address: [Street Address, Address Line 1, Address 1]
+City: [city]
+State: [Province, State/Province, state]
+Zip: [Postal Code, Zip Code, ZIP]

@@ -4,3 +4,4 @@ filled/
 *.json
 *.grid.pdf
 __pycache__/
+!Patient_Data_Template.csv

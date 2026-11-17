@@ -3,7 +3,27 @@
 Fills your in-house PDF forms from Jane patient data in seconds: one patient or a whole list.
 Everything runs on your PC. No patient data is uploaded anywhere, and none is kept in this repo.
 
-## One-time setup per form (5–10 min)
+## Ready-made forms
+
+These five are already mapped and tested. Drop data on `Fill Forms.bat` and pick one:
+
+| Form | Fills from Jane | Staff add (benefits check / request) |
+|---|---|---|
+| Coverage Details | name, DOB, insurance company | in/out-of-network %, copay, deductible, OOP, visits, DME/massage/med-pay |
+| Coverage Details – Medicare | name, DOB, insurance company | same benefit fields (DME/med-pay marked by hand) |
+| Medical Records Release | name, address, DOB, SSN if present | records holder (TO:), injury date |
+| Interoffice Records Request | name, DOB, patient ID, today's date | staff name, requested by, records, dates, delivery, urgency |
+| Patient Travel Sheet | name, patient ID | VA auth #, ICN, visits left, date ending, current visit |
+
+`Patient_Data_Template.csv` has every column the five forms use. Open it in Excel, paste the Jane
+export columns in, add the benefit/request columns, save, and drop it on `Fill Forms.bat`.
+Blank cells simply print blank. Choice columns take: Yes/No, Patient/Attorney/Other,
+Complete/Specific/Billing/Other, Email/Fax/Mail/Pick-Up, Routine/Urgent.
+
+If your Jane export names a column differently (e.g. `Birthdate`), add it to `forms\columns.yaml`.
+The form maps never need changing.
+
+## Adding another form (5–10 min)
 
 1. Put the blank PDF in `forms\`.
 2. Drop it onto **`Setup Form.bat`**. It writes `forms\<Form>.map.yaml`, listing every fillable field.

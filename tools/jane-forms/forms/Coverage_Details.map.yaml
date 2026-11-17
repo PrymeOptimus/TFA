@@ -1,0 +1,35 @@
+# Coverage Details for Chiropractic. Mapped by box POSITION: this PDF's internal field names
+# don't match their labels (the box named "DOB" is really Name of Patient, etc.).
+form: Coverage_Details.pdf
+output: "{Last Name}_{First Name}_Coverage_Details.pdf"
+flatten: false            # staff may still adjust after verifying benefits
+fields:
+  DOB: "{First Name} {Last Name}"                  # Name of Patient
+  CoPay: {value: "{Date of Birth}", date: "%m/%d/%Y"}   # DOB
+  Text_10: "{Insurance Company}"
+  Text_11: "{In-Network %}"
+  Text_12: "{Out-of-Network %}"
+  Text_13: "{Coinsurance %}"
+  Text_14: "{First Visit Amount}"
+  Text_15: "{Visits Until Deductible Met}"
+  Text_16: "{After Deductible Amount}"
+  Deductible: "{Copay}"                            # Co-Pay $
+  Deductible_Met: "{Deductible Ind}"               # Deductible $ Ind.
+  Text_17: "{Deductible Fam}"
+  OOP_Rem: "{Deductible Remaining}"                # Remaining Amount $ (deductible row)
+  Text_5: "{Deductible Met Ind}"
+  OOP: "{Deductible Met Fam}"
+  OOP_Met: "{OOP Ind}"                             # Out of Pocket $ Ind.
+  Visits: "{OOP Fam}"
+  Text_8: "{OOP Met}"
+  Text_23: "{OOP Remaining}"
+  Visits_Rem: "{Visit Limit Per Year}"
+  Text_20: "{Visits Remaining}"
+  Text_9: "{Exclusions}"
+  Checkbox_1: {checked_if: "{DME Covered}", equals: ["Yes", "Y"]}
+  Checkbox_2: {checked_if: "{DME Covered}", equals: ["No", "N"]}
+  Checkbox_3: {checked_if: "{Massage Covered}", equals: ["Yes", "Y"]}
+  Checkbox_4: {checked_if: "{Massage Covered}", equals: ["No", "N"]}
+  Checkbox_5: {checked_if: "{Med Pay}", equals: ["Yes", "Y"]}
+  Rem_Deductible: "{Med Pay Amount}"               # Med-pay Yes $
+  Insurance_Company: {checked_if: "{Med Pay}", equals: ["No", "N"]}   # Med-pay ( ) No

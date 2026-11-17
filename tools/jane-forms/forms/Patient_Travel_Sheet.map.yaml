@@ -1,0 +1,12 @@
+# Patient Travel Sheet / Service & Fee Sheet. Only the patient + VA/PI/DC header boxes are fillable.
+form: Patient_Travel_Sheet.pdf
+output: "{Last Name}_{First Name}_Travel_Sheet.pdf"
+flatten: false
+fields:
+  Name: "{First Name} {Last Name}"
+  "Patient ID": "{Patient ID}"
+  "Auth #": "{Auth Number}"                # VA# / authorization number
+  ICN: "{ICN}"
+  "Rem Visits": "{Visits Remaining}"       # VA/PI/DC visits left
+  Date: {value: "{Auth End Date}", date: "%m/%d/%Y"}   # Date ending
+  "Curr Visit": "{Current Visit}"          # current VA/PI/DC visit #

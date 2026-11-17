@@ -1,0 +1,16 @@
+# Medical Records Release (Total Health Chiropractic letterhead). Patient signs on paper.
+form: Medical_Records_Release.pdf
+output: "{Last Name}_{First Name}_Records_Release.pdf"
+flatten: true
+fields:
+  Text_1: "{Records From Name}"          # TO: line 1 (clinic/hospital/doctor)
+  Text_2: "{Records From Address}"       # TO: line 2
+  Text_3: "{Records From City State Zip}"  # TO: line 3
+  Text_4: "{First Name} {Last Name}"     # PATIENT: line 1
+  Text_5: "{Address}"                    # PATIENT: line 2
+  Text_6: "{City}, {State} {Zip}"        # PATIENT: line 3
+  Text_7: {value: "{Date of Birth}", date: "%m/%d/%Y"}
+  Text_8: "{SSN}"                        # only fills if your data has it
+  Text_9: {value: "{Injury Date}", date: "%m/%d/%Y"}   # "injuries sustained or beginning on"
+  Text_10: "{First Name} {Last Name}"    # patient's full name printed
+  Text_11: "{Records From Name}"         # Clinic, Hospital, or Doctor's Name

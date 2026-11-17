@@ -1,0 +1,26 @@
+# Coverage Details for Chiropractic with Medicare (mapped by box position).
+form: Coverage_Details_Medicare.pdf
+output: "{Last Name}_{First Name}_Coverage_Details_Medicare.pdf"
+flatten: false
+fields:
+  text_1dbar: "{First Name} {Last Name}"
+  text_4ycye: {value: "{Date of Birth}", date: "%m/%d/%Y"}
+  text_2akfk: "{Insurance Company}"
+  text_13lewn: "{In-Network %}"
+  text_14kxrm: "{Out-of-Network %}"
+  text_15bzhq: "{Coinsurance %}"
+  text_17dhzk: "{First Visit Amount}"
+  text_16zign: "{Visits Until Deductible Met}"
+  text_18ngvg: "{After Deductible Amount}"
+  text_3fzjn: "{Copay}"
+  text_5lixn: "{Deductible Ind}"
+  text_19rwlw: "{Deductible Fam}"
+  text_20jqnp: "{Deductible Met Ind}"
+  text_12lqpg: "{Deductible Met Fam}"
+  text_6zxug: "{OOP Ind}"
+  text_11sdlt: "{OOP Fam}"
+  text_7dfjw: "{OOP Met}"
+  text_10ypks: "{Visit Limit Per Year}"
+  text_9xhyf: "{Visits Remaining}"
+  text_8jdby: "{Exclusions}"
+# This form's DME and Med-pay choices are printed text, not boxes: staff mark them by hand.

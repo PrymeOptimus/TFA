@@ -1,0 +1,35 @@
+# Interoffice Medical Records Request (2 pages). "Internal Use Only" boxes are left blank.
+form: Inter_Office_Records_Request.pdf
+output: "{Last Name}_{First Name}_Records_Request.pdf"
+flatten: false
+fields:
+  text_1crtd: "{Today}"                  # Date of Request
+  text_2jzrg: "{Staff Name}"
+  text_3plw: "{First Name} {Last Name}"
+  text_4kvcx: {value: "{Date of Birth}", date: "%m/%d/%Y"}
+  text_5mepc: "{Patient ID}"
+  checkbox_6dlpl: {checked_if: "{Requested By}", equals: "Patient"}
+  checkbox_7wuao: {checked_if: "{Requested By}", equals: "Attorney"}
+  checkbox_8zsyd: {checked_if: "{Requested By}", equals: "Other"}
+  text_13ttby: "{Requested By Other}"
+  checkbox_9rert: {checked_if: "{Records Requested}", equals: ["Complete", "Complete Medical Records"]}
+  checkbox_10efrv: {checked_if: "{Records Requested}", equals: "Specific"}
+  text_14tjdz: "{Specific Records}"
+  checkbox_11nij: {checked_if: "{Records Requested}", equals: ["Billing", "Billing Records Only"]}
+  checkbox_12ougs: {checked_if: "{Records Requested}", equals: "Other"}
+  text_15mfpm: "{Records Requested Other}"
+  text_16lnzn: {value: "{Date Range From}", date: "%m/%d/%Y"}
+  text_17sxzv: {value: "{Date Range To}", date: "%m/%d/%Y"}
+  checkbox_21mnnf: {checked_if: "{Delivery}", equals: ["Email", "Secure Email"]}
+  text_18szd: "{Delivery Email}"
+  checkbox_22eaeq: {checked_if: "{Delivery}", equals: "Fax"}
+  text_19qtji: "{Delivery Fax}"
+  checkbox_23nrrw: {checked_if: "{Delivery}", equals: "Mail"}
+  text_20xkbq: "{Delivery Address}"
+  checkbox_24uiwg: {checked_if: "{Delivery}", equals: ["Pick-Up", "Pickup"]}
+  text_25ohgb: "{Pick-Up Recipient}"
+  checkbox_26ghut: {checked_if: "{Authorization On File}", equals: ["Yes", "Y"]}
+  checkbox_27tag: {checked_if: "{Authorization On File}", equals: ["No", "N"]}
+  checkbox_28fufl: {checked_if: "{Urgency}", equals: "Routine"}
+  checkbox_29al: {checked_if: "{Urgency}", equals: "Urgent"}
+  text_30ghst: "{Urgent Reason}"

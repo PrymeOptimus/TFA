@@ -15,13 +15,17 @@ These five are already mapped and tested. Drop data on `Fill Forms.bat` and pick
 | Interoffice Records Request | name, DOB, patient ID, today's date | staff name, requested by, records, dates, delivery, urgency |
 | Patient Travel Sheet | name, patient ID | VA auth #, ICN, visits left, date ending, current visit |
 
-`Patient_Data_Template.csv` has every column the five forms use. Open it in Excel, paste the Jane
-export columns in, add the benefit/request columns, save, and drop it on `Fill Forms.bat`.
-Blank cells simply print blank. Choice columns take: Yes/No, Patient/Attorney/Other,
+**Fastest path:** in Jane, export **Patients** (CSV) and drop the file straight on `Fill Forms.bat`.
+Name, DOB, address, patient number and SSN fill automatically: the column names are already matched.
+
+**Insurance and benefits are not in Jane's patient export.** For the Coverage Details, request and
+travel-sheet fields, open the export in Excel and add the extra columns from `Patient_Data_Template.csv`
+(it is Jane's exact header plus the 48 staff columns), fill them in, save, and drop it on `Fill Forms.bat`.
+Blank cells print blank. Choice columns take: Yes/No, Patient/Attorney/Other,
 Complete/Specific/Billing/Other, Email/Fax/Mail/Pick-Up, Routine/Urgent.
 
-If your Jane export names a column differently (e.g. `Birthdate`), add it to `forms\columns.yaml`.
-The form maps never need changing.
+Forms use the patient's **legal** first name, never Jane's Preferred Name.
+If Jane ever renames a column, add the new name to `forms\columns.yaml`; the form maps never change.
 
 ## Adding another form (5–10 min)
 

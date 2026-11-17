@@ -7,7 +7,7 @@ fields:
   Text_2: "{Records From Address}"       # TO: line 2
   Text_3: "{Records From City State Zip}"  # TO: line 3
   Text_4: "{First Name} {Last Name}"     # PATIENT: line 1
-  Text_5: "{Address}"                    # PATIENT: line 2
+  Text_5: "{Address} {Address 2}"        # PATIENT: line 2 (street + apt/suite)
   Text_6: "{City}, {State} {Zip}"        # PATIENT: line 3
   Text_7: {value: "{Date of Birth}", date: "%m/%d/%Y"}
   Text_8: "{SSN}"                        # only fills if your data has it

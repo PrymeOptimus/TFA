@@ -158,3 +158,45 @@ def test_clinic_maps_only_name_fields_that_exist(map_file, capsys, tmp_path):
     data.write_text(json.dumps({"First Name": "A", "Last Name": "B"}))
     assert jf.main(["fill", str(map_file), str(data), "--out", str(tmp_path / "o")]) == 0
     assert "WARNING" not in capsys.readouterr().out
+
+
+JANE_HEADER = ("patient_guid,Patient Number,Member Since,First Name,Preferred Name,Middle Name,Last Name,Email,Email Status,"
+               "Home Phone,Mobile Phone,Work Phone,Fax Phone,Street Address,Street Address 2,City,Province,Postal,Country,"
+               "Birth Date,Sex,Gender,Pronouns,Social Security Number,Referral Source,Referred To,Marketing Email Opt In,"
+               "Do Not Email,Family Doctor,Family Doctor Phone,Family Doctor Email,Guardian Name,Medical Alert,"
+               "Emergency Contact Name,Emergency Contact Phone,Emergency Contact Relationship,Occupation,Employer,"
+               "Referring Professional,Referring Professional Email,Referring Professional Phone,First Visit,Last Visit,"
+               "Deceased At,Discharged At,Active,Online Booking Policy,Time Zone").split(",")
+
+
+def test_raw_jane_patient_export_fills_every_clinic_form(tmp_path, capsys):
+    """A Jane 'Patients' export (exact header, fictional patient) dropped straight in."""
+    row = dict.fromkeys(JANE_HEADER, "")
+    row.update({"Patient Number": "4521", "First Name": "Testy", "Preferred Name": "TT", "Last Name": "McTestface",
+                "Street Address": "100 Sample St", "Street Address 2": "Apt 2", "City": "Macon", "Province": "GA",
+                "Postal": "31201", "Birth Date": "1975-07-04", "Social Security Number": "000-00-0000"})
+    data = tmp_path / "jane.csv"
+    with open(data, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=JANE_HEADER)
+        w.writeheader()
+        w.writerow(row)
+    forms = Path(__file__).parent / "forms"
+    out = tmp_path / "o"
+    for m in sorted(forms.glob("*.map.yaml")):
+        assert jf.main(["fill", str(m), str(data), "--out", str(out)]) == 0
+    assert "WARNING" not in capsys.readouterr().out
+    rel = values(out / "McTestface_Testy_Records_Release.pdf")
+    assert rel["Text_4"] == "Testy McTestface"          # legal name, not Preferred Name
+    assert rel["Text_5"] == "100 Sample St Apt 2"
+    assert rel["Text_6"] == "Macon, GA 31201"
+    assert rel["Text_7"] == "07/04/1975" and rel["Text_8"] == "000-00-0000"
+    cov = values(out / "McTestface_Testy_Coverage_Details.pdf")
+    assert cov["DOB"] == "Testy McTestface" and cov["CoPay"] == "07/04/1975"   # position-mapped boxes
+    req = values(out / "McTestface_Testy_Records_Request.pdf")
+    assert req["text_5mepc"] == "4521" and req["text_1crtd"]                     # patient ID + today's date
+    assert values(out / "McTestface_Testy_Travel_Sheet.pdf")["Patient ID"] == "4521"
+
+
+def test_template_starts_with_the_exact_jane_header():
+    header = next(csv.reader(open(Path(__file__).parent / "Patient_Data_Template.csv", encoding="utf-8-sig")))
+    assert header[:len(JANE_HEADER)] == JANE_HEADER and "Insurance Company" in header

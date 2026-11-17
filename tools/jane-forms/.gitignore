@@ -1,0 +1,6 @@
+# Patient data never goes in git
+filled/
+*.csv
+*.json
+*.grid.pdf
+__pycache__/

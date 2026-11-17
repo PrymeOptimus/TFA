@@ -9,9 +9,9 @@ These five are already mapped and tested. Drop data on `Fill Forms.bat` and pick
 
 | Form | Fills from Jane | Staff add (benefits check / request) |
 |---|---|---|
-| Coverage Details | name, DOB, insurance company | in/out-of-network %, copay, deductible, OOP, visits, DME/massage/med-pay |
-| Coverage Details – Medicare | name, DOB, insurance company | same benefit fields (DME/med-pay marked by hand) |
-| Medical Records Release | name, address, DOB, SSN if present | records holder (TO:), injury date |
+| Coverage Details | name, DOB | insurance company, in/out-of-network %, copay, deductible, OOP, visits, DME/massage/med-pay |
+| Coverage Details – Medicare | name, DOB | insurance company + same benefit fields (DME/med-pay marked by hand) |
+| Medical Records Release | name, address (incl. apt/suite), DOB, SSN if in Jane | records holder (TO:), injury date |
 | Interoffice Records Request | name, DOB, patient ID, today's date | staff name, requested by, records, dates, delivery, urgency |
 | Patient Travel Sheet | name, patient ID | VA auth #, ICN, visits left, date ending, current visit |
 
